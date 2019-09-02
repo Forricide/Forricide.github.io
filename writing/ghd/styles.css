@@ -4,3 +4,10 @@ p
     color: #333333;
     font-size: 1em;
 }
+
+body
+{
+    max-width: 30em;
+    margin: 0 auto;
+    font-size: 20px;
+}
