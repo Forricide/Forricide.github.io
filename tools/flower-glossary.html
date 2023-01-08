@@ -8,6 +8,10 @@
     <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2"></script>
 </head>
 <style>
+p {
+    margin-top: 0.7em;
+    margin-bottom: 0.7em;
+}
 #search_param {
     width: 86%;
     margin-left: 7%;
@@ -31,7 +35,7 @@ ul, li {
     -->
     <input id="search_param" type="text" placeholder="Search..." /><br/>
 
-    Threshold: <input id="threshold" type="text" style="width: 2em;" value="0.5" autocomplete="off" /> | Results: <span id="results_count">0/0</span> | Full text search: <a href="https://sekhmet.fun/search">sekhmet.fun</a>
+    Threshold: <input id="threshold" type="text" style="width: 2em;" value="0.5" autocomplete="off" /> | Include WoL: <input type="checkbox" id="include-wol"> | WoL Only: <input type="checkbox" id="wol-only"> | Results: <span id="results_count">0/0</span> | Full text search: <a href="https://sekhmet.fun/search">sekhmet.fun</a>
     <div id="results"></div>
 
     <div id="glossary-debug" style="display: none">
@@ -55,6 +59,10 @@ class Character {
         this.searchText = name + ' ' + this.traits.join(' ');
     }
 
+    get tags() {
+        return ['profile'];
+    }
+
     asStr() {
         return '<p>' + this.name + '</p><p>' + this.traits + '</p>';
     }
@@ -73,6 +81,10 @@ class BasicDefn {
         this.searchText = this.name + ' ' + this.parent;
     }
 
+    get tags() {
+        return ['basic'];
+    }
+
     set parent(p) {
         if (p == null) return;
         this.note = ' (' + p + ')';
@@ -84,7 +96,23 @@ class BasicDefn {
     }
 
     asDisplay() {
-        return '<p class="profile-name"><b>' + this.name + this.note + ': </b>' + this.data + '</p>';
+        return '<p class="general-para"><b>' + this.name + this.note + ': </b>' + this.data + '</p>';
+    }
+}
+
+class WolQuote {
+    constructor(day, data) {
+        this.data = data;
+        this.day = day;
+        this.searchText = data.replace(/<br>/g, ' ');
+    }
+
+    get tags() {
+        return ['wol'];
+    }
+
+    asDisplay() {
+        return '<p class="general-para"><i>Lurina:</i> ' + this.data + ' (' + this.day + ')</p>'
     }
 }
 
@@ -124,6 +152,14 @@ function getExtraGlossary()
                 var obj = new BasicDefn(defn, parsed.acronyms[defn]);
                 obj.parent = 'Acronym';
                 extra.push(obj);
+            }
+        }
+        if ('wol' in parsed) {
+            console.log('Loading wol...');
+            for (var day in parsed.wol)
+            {
+                for (let quote of parsed.wol[day])
+                    extra.push(new WolQuote(day, quote));
             }
         }
         return extra;
@@ -206,6 +242,17 @@ function asParsed(h)
     return parsed;
 }
 
+function asSearch(o) {
+    const wol_only = document.getElementById("wol-only").checked;
+    if (o.tags.includes("wol"))
+    {
+        if (!document.getElementById("include-wol").checked && !wol_only) return '';
+    }
+    else if (wol_only) return '';
+
+    return o.searchText;
+}
+
 var list = [];
 const searchOptions = {
   // isCaseSensitive: false,
@@ -224,16 +271,23 @@ const searchOptions = {
     ignoreLocation: true,
     threshold: 0.5,
     keys: [
-        { name: 'contents', getFn: (o) => o.searchText },
+        { name: 'contents', getFn: asSearch },
     ]
 };
 var fuse = null;
-function remakeFuse()
+function updateList(l)
 {
+    list = l;
+    if (fuse) fuse = new Fuse(list, searchOptions);
+}
+
+function redoSearch() {
     fuse = new Fuse(list, searchOptions);
+    updateSearch();
 }
 
 function updateSearch() {
+    // ensure we have Fuse
     fuse = fuse || new Fuse(list, searchOptions);
     // Change the pattern
     const pattern = document.getElementById("search_param").value;
@@ -273,8 +327,7 @@ function main()
     getRRGlossary().then(function(b) {
         document.getElementById("glossary-debug").innerHTML = b.innerHTML;
 
-        list = list.concat(asParsed(b));
-        if (fuse) remakeFuse();
+        updateList(list.concat(asParsed(b)));
         document.getElementById("results_count").innerText = list.length + '/' + list.length;
 
         var url = new URL(window.location.href);
@@ -291,8 +344,7 @@ function main()
 
     getExtraGlossary().then(function(b) {
         // code repetition lol it's okay I won't do this again for sure :)))
-        list = list.concat(b); 
-        if (fuse) remakeFuse();
+        updateList(list.concat(b));
         document.getElementById("results_count").innerText = list.length + '/' + list.length;
 
         var url = new URL(window.location.href);
@@ -314,6 +366,9 @@ function main()
     */
     document.getElementById("search_param").addEventListener("input", updateSearch);
     document.getElementById("threshold").addEventListener("input", updateSearch);
+    // these must completely remake the fuse object so that it can refilter our search data.
+    document.getElementById("wol-only").addEventListener("input", redoSearch);
+    document.getElementById("include-wol").addEventListener("input", redoSearch);
 }
 
 document.addEventListener('DOMContentLoaded', main, false);
