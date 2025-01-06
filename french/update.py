@@ -2,7 +2,7 @@
 from os.path import join, dirname
 import markdown
 
-template = join(dirname(__file__), "index.template")
+template = join(dirname(__file__), "index.template.html")
 dest = join(dirname(__file__), "index.html")
 src = join(dirname(__file__), "index.md")
 res = markdown.markdown(open(src).read())
